@@ -1,0 +1,81 @@
+services:
+  web:
+    build: ./app
+    container_name: network-monitor-web
+    ports:
+      - "5000:5000"
+    environment:
+      APP_NAME: "Network Monitoring Demo"
+    volumes:
+      - app_data:/data
+    networks:
+      - monitoring_net
+    restart: unless-stopped
+
+  zabbix-db:
+    image: postgres:16-alpine
+    container_name: zabbix-postgres
+    environment:
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_db_password
+      POSTGRES_DB: zabbix
+    volumes:
+      - zabbix_db_data:/var/lib/postgresql/data
+    networks:
+      - monitoring_net
+    restart: unless-stopped
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:7.0-alpine-latest
+    container_name: zabbix-server
+    depends_on:
+      - zabbix-db
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_db_password
+      POSTGRES_DB: zabbix
+    ports:
+      - "10051:10051"
+    networks:
+      - monitoring_net
+    restart: unless-stopped
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:7.0-alpine-latest
+    container_name: zabbix-web
+    depends_on:
+      - zabbix-server
+      - zabbix-db
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_db_password
+      POSTGRES_DB: zabbix
+      ZBX_SERVER_HOST: zabbix-server
+      PHP_TZ: Europe/Kyiv
+    ports:
+      - "8080:8080"
+    networks:
+      - monitoring_net
+    restart: unless-stopped
+
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:7.0-alpine-latest
+    container_name: zabbix-agent
+    depends_on:
+      - zabbix-server
+    environment:
+      ZBX_HOSTNAME: "Docker Zabbix agent"
+      ZBX_SERVER_HOST: zabbix-server
+    networks:
+      - monitoring_net
+    restart: unless-stopped
+
+volumes:
+  app_data:
+  zabbix_db_data:
+
+networks:
+  monitoring_net:
+    driver: bridge

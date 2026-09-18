@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<main class="container">
+    <h1>{{ app_name }}</h1>
+    <p class="subtitle">Контейнеризація, моніторинг і аналіз мережевої взаємодії.</p>
+
+    <section class="cards">
+        <div class="card"><h2>Запити</h2><p id="total">{{ stats.total_requests }}</p></div>
+        <div class="card"><h2>Середній час</h2><p><span id="average">{{ stats.average_response_ms }}</span> ms</p></div>
+        <div class="card"><h2>Стан</h2><p class="healthy">Працює</p></div>
+    </section>
+
+    <section class="panel">
+        <h2>Тестування</h2>
+        <p>Кнопка створює HTTP-запит до тестового endpoint.</p>
+        <button onclick="generateRequest()">Generate request</button>
+        <p id="result"></p>
+    </section>
+
+    <section class="panel">
+        <h2>Службові адреси</h2>
+        <ul>
+            <li><a href="/health" target="_blank">Health check</a></li>
+            <li><a href="/metrics" target="_blank">Metrics</a></li>
+            <li><a href="/api/stats" target="_blank">Statistics API</a></li>
+        </ul>
+    </section>
+</main>
+<script>
+async function refreshStats() {
+    const response = await fetch("/api/stats");
+    const data = await response.json();
+    document.getElementById("total").textContent = data.total_requests;
+    document.getElementById("average").textContent = data.average_response_ms;
+}
+async function generateRequest() {
+    const response = await fetch("/api/test-request");
+    const data = await response.json();
+    document.getElementById("result").textContent = data.message + " — " + data.timestamp;
+    await refreshStats();
+}
+</script>
+</body>
+</html>
