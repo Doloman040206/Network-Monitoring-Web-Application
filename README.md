@@ -119,6 +119,8 @@ HTML-сторінка формується Flask через шаблон `index.
 -   Docker Containers: `http://localhost:5000/api/containers`
 -   Zabbix Web Interface: `http://localhost:8080`
 
+------------------------------------------------------------------------
+
 ## ▶️ Запуск проєкту
 
 Запустити усі сервіси:
