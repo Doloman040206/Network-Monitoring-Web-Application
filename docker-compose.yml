@@ -6,8 +6,37 @@ services:
       - "5000:5000"
     environment:
       APP_NAME: "Network Monitoring Demo"
+      DB_HOST: app-db
+      DB_PORT: "5432"
+      DB_NAME: network_monitor
+      DB_USER: monitor_user
+      DB_PASSWORD: ${APP_DB_PASSWORD:-monitor_dev_password_change_me}
     volumes:
-      - app_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      app-db:
+        condition: service_healthy
+    networks:
+      - monitoring_net
+    restart: unless-stopped
+
+  app-db:
+    image: postgres:16-alpine
+    container_name: network-monitor-postgres
+    environment:
+      POSTGRES_DB: network_monitor
+      POSTGRES_USER: monitor_user
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-monitor_dev_password_change_me}
+    ports:
+      - "5433:5432"
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - monitoring_net
     restart: unless-stopped
@@ -17,10 +46,16 @@ services:
     container_name: zabbix-postgres
     environment:
       POSTGRES_USER: zabbix
-      POSTGRES_PASSWORD: zabbix_db_password
+      POSTGRES_PASSWORD: ${ZABBIX_DB_PASSWORD:-zabbix_db_password}
       POSTGRES_DB: zabbix
     volumes:
       - zabbix_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - monitoring_net
     restart: unless-stopped
@@ -29,11 +64,12 @@ services:
     image: zabbix/zabbix-server-pgsql:7.0-alpine-latest
     container_name: zabbix-server
     depends_on:
-      - zabbix-db
+      zabbix-db:
+        condition: service_healthy
     environment:
       DB_SERVER_HOST: zabbix-db
       POSTGRES_USER: zabbix
-      POSTGRES_PASSWORD: zabbix_db_password
+      POSTGRES_PASSWORD: ${ZABBIX_DB_PASSWORD:-zabbix_db_password}
       POSTGRES_DB: zabbix
     ports:
       - "10051:10051"
@@ -50,10 +86,10 @@ services:
     environment:
       DB_SERVER_HOST: zabbix-db
       POSTGRES_USER: zabbix
-      POSTGRES_PASSWORD: zabbix_db_password
+      POSTGRES_PASSWORD: ${ZABBIX_DB_PASSWORD:-zabbix_db_password}
       POSTGRES_DB: zabbix
       ZBX_SERVER_HOST: zabbix-server
-      PHP_TZ: Europe/Kyiv
+      PHP_TZ: Europe/Kiev
     ports:
       - "8080:8080"
     networks:
@@ -73,7 +109,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  app_data:
+  app_db_data:
   zabbix_db_data:
 
 networks:

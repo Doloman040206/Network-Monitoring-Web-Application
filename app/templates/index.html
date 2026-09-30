@@ -4,24 +4,84 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ app_name }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <main class="container">
     <h1>{{ app_name }}</h1>
-    <p class="subtitle">Контейнеризація, моніторинг і аналіз мережевої взаємодії.</p>
+    <p class="subtitle">
+        Контейнеризація, моніторинг і аналіз мережевої взаємодії.
+    </p>
 
     <section class="cards">
-        <div class="card"><h2>Запити</h2><p id="total">{{ stats.total_requests }}</p></div>
-        <div class="card"><h2>Середній час</h2><p><span id="average">{{ stats.average_response_ms }}</span> ms</p></div>
-        <div class="card"><h2>Стан</h2><p class="healthy">Працює</p></div>
+        <div class="card">
+            <h2>HTTP-запити</h2>
+            <p id="total">{{ stats.total_requests }}</p>
+        </div>
+
+        <div class="card">
+            <h2>Середній час</h2>
+            <p><span id="average">{{ stats.average_response_ms }}</span> ms</p>
+        </div>
+
+        <div class="card">
+            <h2>PostgreSQL</h2>
+            {% if database_available %}
+                <p class="healthy">Є підключення</p>
+            {% else %}
+                <p class="unhealthy">Недоступна</p>
+            {% endif %}
+        </div>
     </section>
 
     <section class="panel">
-        <h2>Тестування</h2>
-        <p>Кнопка створює HTTP-запит до тестового endpoint.</p>
-        <button onclick="generateRequest()">Generate request</button>
-        <p id="result"></p>
+        <h2>Тестування HTTP-запитів</h2>
+        <p>
+            Надсилання запитів до тестового endpoint.
+        </p>
+
+        <button type="button" onclick="generateRequest()">
+            Generate request
+        </button>
+
+        <p id="result" role="status"></p>
+    </section>
+
+    <section class="panel">
+        <div class="section-heading">
+            <div>
+                <h2>Docker-контейнери</h2>
+                <p class="subtitle">
+                    Отримуємо інформацію за допомогою Docker SDK for Python.
+                </p>
+            </div>
+
+            <button type="button" onclick="refreshContainers()">
+                Оновити список
+            </button>
+        </div>
+
+        <p id="containerMessage" role="status">
+            Завантаження контейнерів...
+        </p>
+
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                <tr>
+                    <th>Назва</th>
+                    <th>ID</th>
+                    <th>Образ</th>
+                    <th>Стан</th>
+                    <th>Порти</th>
+                </tr>
+                </thead>
+
+                <tbody id="containersBody">
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <section class="panel">
@@ -30,22 +90,106 @@
             <li><a href="/health" target="_blank">Health check</a></li>
             <li><a href="/metrics" target="_blank">Metrics</a></li>
             <li><a href="/api/stats" target="_blank">Statistics API</a></li>
+            <li>
+                <a href="/api/containers" target="_blank">
+                    Docker Containers API
+                </a>
+            </li>
         </ul>
     </section>
 </main>
+
 <script>
 async function refreshStats() {
     const response = await fetch("/api/stats");
     const data = await response.json();
-    document.getElementById("total").textContent = data.total_requests;
-    document.getElementById("average").textContent = data.average_response_ms;
+
+    if (!response.ok) {
+        throw new Error(data.error || "Could not load statistics");
+    }
+
+    document.getElementById("total").textContent =
+        data.total_requests;
+
+    document.getElementById("average").textContent =
+        data.average_response_ms;
 }
+
 async function generateRequest() {
-    const response = await fetch("/api/test-request");
-    const data = await response.json();
-    document.getElementById("result").textContent = data.message + " — " + data.timestamp;
-    await refreshStats();
+    const result = document.getElementById("result");
+
+    try {
+        const response = await fetch("/api/test-request");
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Request failed");
+        }
+
+        result.textContent =
+            data.message + " — " + data.timestamp;
+
+        await refreshStats();
+    } catch (error) {
+        result.textContent = "Помилка: " + error.message;
+    }
 }
+
+async function refreshContainers() {
+    const message = document.getElementById("containerMessage");
+    const body = document.getElementById("containersBody");
+
+    message.textContent = "Завантаження...";
+    body.replaceChildren();
+
+    try {
+        const response = await fetch("/api/containers");
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Container API error");
+        }
+
+        message.textContent =
+            "Знайдено контейнерів: " + data.count;
+
+        for (const container of data.containers) {
+            const row = document.createElement("tr");
+
+            function addCell(value) {
+                const cell = document.createElement("td");
+                cell.textContent = value;
+                row.appendChild(cell);
+                return cell;
+            }
+
+            addCell(container.name);
+            addCell(container.id);
+            addCell(container.image);
+
+            const statusCell = addCell(container.status);
+            statusCell.className =
+                container.status === "running"
+                    ? "healthy"
+                    : "unhealthy";
+
+            const portsCell = addCell(
+                (container.ports || []).join("\n")
+            );
+            portsCell.className = "ports-cell";
+
+            body.appendChild(row);
+        }
+
+        if (data.count === 0) {
+            message.textContent = "Контейнери не знайдені.";
+        }
+    } catch (error) {
+        message.textContent =
+            "Не вдалося отримати контейнери: " + error.message;
+    }
+}
+
+refreshContainers();
 </script>
 </body>
 </html>

@@ -1,11 +1,132 @@
-body { margin: 0; font-family: Arial, sans-serif; background: #f2f4f7; color: #20242a; }
-.container { max-width: 950px; margin: 40px auto; padding: 0 20px; }
-.subtitle { color: #59636e; }
-.cards { display: flex; gap: 16px; flex-wrap: wrap; margin: 25px 0; }
-.card, .panel { background: white; border-radius: 10px; padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
-.card { flex: 1; min-width: 180px; }
-.card p { font-size: 28px; font-weight: bold; }
-.healthy { color: #16803c; }
-button { padding: 12px 18px; border: 0; border-radius: 6px; cursor: pointer; background: #2457d6; color: white; }
-.panel { margin: 18px 0; }
-a { color: #2457d6; }
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f2f4f7;
+    color: #20242a;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 0 20px;
+}
+
+.subtitle {
+    color: #59636e;
+}
+
+.cards {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 25px 0;
+}
+
+.card,
+.panel {
+    background: white;
+    border-radius: 10px;
+    padding: 22px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.card {
+    flex: 1;
+    min-width: 180px;
+}
+
+.card p {
+    font-size: 25px;
+    font-weight: bold;
+}
+
+.healthy {
+    color: #16803c;
+}
+
+.unhealthy {
+    color: #c62828;
+}
+
+button {
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #2457d6;
+    color: white;
+}
+
+button:hover {
+    background: #1744b4;
+}
+
+.panel {
+    margin: 18px 0;
+}
+
+a {
+    color: #2457d6;
+}
+
+.section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+    font-size: 14px;
+}
+
+th,
+td {
+    border: 1px solid #dce1e7;
+    padding: 12px;
+    text-align: left;
+    vertical-align: top;
+}
+
+th {
+    background: #edf1f6;
+}
+
+tbody tr:nth-child(even) {
+    background: #f8f9fb;
+}
+
+.ports-cell {
+    white-space: pre-line;
+    min-width: 170px;
+}
+
+#result,
+#containerMessage {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 650px) {
+    .container {
+        margin: 20px auto;
+        padding: 0 12px;
+    }
+
+    .card,
+    .panel {
+        padding: 16px;
+    }
+
+    .section-heading button {
+        width: 100%;
+    }
+}

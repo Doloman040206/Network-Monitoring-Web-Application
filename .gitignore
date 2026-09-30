@@ -1,5 +1,8 @@
-__pycache__/
-*.pyc
 .env
-.vscode/
-data/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+captures/
+*.pcap
+*.pcapng
