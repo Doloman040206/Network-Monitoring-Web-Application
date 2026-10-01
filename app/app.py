@@ -157,24 +157,33 @@ def get_containers():
         result = []
 
         for container in containers:
-            container.reload()
+            try:
+                container.reload()
 
-            image_tags = container.image.tags
-            image_name = (
-                image_tags[0]
-                if image_tags
-                else container.attrs.get("Config", {}).get(
-                    "Image", "unknown"
+                image_name = (
+                    container.attrs.get("Config", {}).get("Image")
+                    or "unknown"
                 )
-            )
 
-            result.append({
-                "id": container.short_id,
-                "name": container.name,
-                "image": image_name,
-                "status": container.status,
-                "ports": get_container_ports(container)
-            })
+                try:
+                    image_tags = container.image.tags
+
+                    if image_tags:
+                        image_name = image_tags[0]
+
+                except docker.errors.ImageNotFound:
+                    pass
+
+                result.append({
+                    "id": container.short_id,
+                    "name": container.name,
+                    "image": image_name,
+                    "status": container.status,
+                    "ports": get_container_ports(container)
+                })
+
+            except docker.errors.NotFound:
+                continue
 
         result.sort(key=lambda item: item["name"].lower())
         return result
