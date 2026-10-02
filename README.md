@@ -1,199 +1,266 @@
-# Network Monitoring Web Application (Flask + Docker + PostgreSQL + Zabbix + Wireshark)
+# Network Monitoring Web Application
 
-## 📌 Опис проєкту
+## Flask + Nginx + PostgreSQL + Docker + Docker Compose + Zabbix + Wireshark
 
-Вебзастосунок створено на Python із використанням Flask. Він призначений
-для моніторингу доступності вебсервісу, збору статистики HTTP-запитів,
-перегляду інформації про Docker-контейнери та дослідження мережевого
-трафіку.
+## Опис проєкту
 
-Система використовує Docker і Docker Compose для запуску
-взаємопов'язаних компонентів. Статистика вебзастосунку зберігається в
-окремій базі PostgreSQL, а Zabbix використовує власну базу PostgreSQL.
+**Network Monitoring Web Application** --- навчальний багатоконтейнерний
+мережевий вебзастосунок, розроблений на Python із використанням Flask та
+розгорнутий у Linux-середовищі WSL2 з Docker Engine і Docker Compose.
 
-------------------------------------------------------------------------
+Кінцева архітектура: **клієнт → Nginx reverse proxy → Flask application
+→ PostgreSQL**. Основні сервіси працюють у користувацькій Docker
+bridge-мережі `monitoring_net` з адресним простором `172.28.0.0/24`.
+Зовні опубліковано лише порт Nginx `8080`; Flask і PostgreSQL не мають
+безпосередньо опублікованих портів хоста.
 
-## 🎯 Функціональні можливості
+Система додатково містить Zabbix для моніторингу доступності Flask
+та Wireshark для аналізу HTTP/TCP-трафіку і окремо запити до бази даних.
 
-### 🌐 Вебзастосунок Flask
+## Архітектура
 
--   відображає головну сторінку з показниками роботи застосунку;
--   надає endpoint перевірки стану `/health`;
--   надає API статистики `/api/stats`;
--   надає тестовий endpoint `/api/test-request`;
--   реєструє HTTP-запити, вимірює тривалість обробки та обчислює
-    середній час відповіді;
--   зберігає статистику в PostgreSQL;
--   надає endpoint `/metrics` для базових показників у текстовому
-    форматі;
--   надає endpoint `/api/containers`, який через отримує
-    назви, образи, стани та опубліковані порти контейнерів.
+``` text
+Linux / WSL2
+└── Docker Engine
+    └── monitoring_net (bridge, 172.28.0.0/24)
+        ├── proxy        → Nginx :80, host :8080
+        ├── web          → Flask :5000, not published
+        ├── app-db       → PostgreSQL :5432, not published
+        ├── zabbix-server
+        ├── zabbix-web
+        ├── zabbix-db    → PostgreSQL :5432
+        └── zabbix-agent → Zabbix Agent 2
+```
 
-### 📊 Моніторинг Zabbix
+Взаємодія:
 
--   запускає Zabbix Server і вебінтерфейс Zabbix у контейнерах;
--   використовує окрему базу PostgreSQL для службових даних Zabbix;
--   дає змогу налаштувати HTTP agent для перевірки `/health`;
--   дозволяє переглядати останні отримані значення та налаштовувати
-    тригери;
--   допомагає виявляти ситуації, коли застосунок перестає відповідати.
+``` text
+Host → proxy:8080 → web:5000 → app-db:5432
+Zabbix Server → web:5000/health
+Zabbix Server → zabbix-db:5432
+```
 
-### 🐳 Контейнеризація Docker
+## Docker network
 
--   `web` --- Flask-застосунок;
--   `app-db` --- PostgreSQL для статистики HTTP-запитів;
--   `zabbix-server` --- сервер моніторингу;
--   `zabbix-web` --- вебінтерфейс Zabbix;
--   `zabbix-db` --- PostgreSQL для службових даних Zabbix;
--   `monitoring_net` --- користувацька bridge-мережа для взаємодії
-    сервісів;
--   Docker volumes --- для збереження даних баз даних;
--   Docker SDK for Python (`docker-py`) --- для отримання інформації про
-    контейнери через Docker API.
+`monitoring_net` --- користувацька bridge-мережа: - Driver: `bridge` -
+Subnet: `172.28.0.0/24` - Gateway: `172.28.0.1` - DNS: Docker embedded
+DNS
 
-### 🦈 Аналіз мережевого трафіку Wireshark
+Сервіси звертаються за іменами `web`, `app-db`, `zabbix-db`, а не за як таким
+фіксованими IP.
 
--   дозволяє аналізувати HTTP-запити, відповіді та TCP-з'єднання;
--   може використовуватися для дослідження локального HTTP-трафіку;
--   дає змогу організувати окреме захоплення трафіку між Flask і
-    PostgreSQL.
+## Docker та Docker Compose
 
-------------------------------------------------------------------------
+Перевірка Docker:
 
-## 🧱 Архітектура та бази даних
+``` bash
+docker version
+docker info
+systemctl status docker --no-pager
+docker context ls
+docker context show
+```
 
-Проєкт використовує як такі **дві окремі бази PostgreSQL**.
+Перевірка Compose:
 
-### 1. PostgreSQL застосунку (`app-db`)
+``` bash
+docker compose version
+docker compose config --quiet
+docker compose ps
+```
 
-База зберігає статистику HTTP-запитів у таблиці `requests`:
-
--   `id` --- унікальний ідентифікатор запису;
--   `endpoint` --- endpoint, до якого надійшов запит;
--   `duration_ms` --- тривалість обробки в мілісекундах;
--   `created_at` --- дата й час створення запису.
-
-Flask підключається до `app-db` за внутрішнім ім'ям сервісу та портом
-PostgreSQL `5432`.
-
-### 2. PostgreSQL Zabbix (`zabbix-db`)
-
-Окрема база зберігає конфігурацію Zabbix, елементи даних, тригери та
-історію показників.
-
-### Взаємодія компонентів
-
--   браузер → Flask через порт `5000`;
--   Flask → `app-db` через внутрішню Docker-мережу;
--   Zabbix Server → `zabbix-db` через внутрішню Docker-мережу;
--   браузер → Zabbix Web через порт `8080`;
--   Flask → Docker API через змонтований Docker socket.
-
-------------------------------------------------------------------------
-
-## 🛠 Використані технології
-
--   Python 3.12;
--   Flask;
--   PostgreSQL для статистики вебзастосунку;
--   PostgreSQL для Zabbix;
--   SQL;
--   Docker;
--   Docker Compose;
--   Docker SDK for Python (`docker-py`);
--   Zabbix 7.0;
--   Wireshark;
--   HTTP, JSON і TCP/IP.
-
-------------------------------------------------------------------------
-
-## 🌐 Інтерфейс та API
-
-HTML-сторінка формується Flask через шаблон `index.html`.
-
--   Flask Web Application: `http://localhost:5000`
--   Health Check: `http://localhost:5000/health`
--   API Statistics: `http://localhost:5000/api/stats`
--   Test Request: `http://localhost:5000/api/test-request`
--   Metrics: `http://localhost:5000/metrics`
--   Docker Containers: `http://localhost:5000/api/containers`
--   Zabbix Web Interface: `http://localhost:8080`
-
-------------------------------------------------------------------------
-
-## ▶️ Запуск проєкту
-
-Запустити усі сервіси:
+Запуск:
 
 ``` bash
 docker compose up -d --build
 ```
 
-Перевірити стан контейнерів:
-
-``` bash
-docker compose ps
-```
-
-Переглянути журнали:
+Логи:
 
 ``` bash
 docker compose logs --tail=100
 ```
 
-Перевірити основні endpoint:
-
-``` bash
-curl -i http://localhost:5000/health
-curl -i http://localhost:5000/api/stats
-curl -i http://localhost:5000/api/test-request
-curl -i http://localhost:5000/api/containers
-```
-
-Переглянути останні записи в PostgreSQL застосунку:
-
-``` bash
-docker compose exec app-db psql -U monitor_user -d network_monitor \
-  -c "SELECT id, endpoint, duration_ms, created_at FROM requests ORDER BY id DESC LIMIT 10;"
-```
-
-Зупинити контейнери без видалення:
+Зупинка:
 
 ``` bash
 docker compose stop
 ```
 
-Повторно запустити зупинені контейнери:
+Повторний запуск:
 
 ``` bash
 docker compose start
 ```
 
-Зупинити й видалити контейнери та мережі Compose:
+## Nginx reverse proxy
+
+`proxy` використовує `nginx:1.27-alpine`. Він є єдиною зовнішньою точкою
+входу до Flask.
+
+``` text
+Host :8080 → Nginx :80 → web:5000
+```
+
+Перевірка:
 
 ``` bash
-docker compose down
+docker port network-monitor-proxy
+docker compose logs --tail=100 proxy
+docker compose port web 5000
 ```
 
-------------------------------------------------------------------------
+## Flask / Python
 
-## 🧪 Перевірка мережевого трафіку
+`web` --- Flask-застосунок на Python 3.12. Внутрішній порт --- `5000`.
 
-Для HTTP-трафіку у Wireshark можна застосувати фільтр:
+Основні endpoint: - `/` --- головна сторінка; - `/health` --- перевірка
+Flask і PostgreSQL; - `/api/stats` --- статистика HTTP; -
+`/api/test-request` --- тестовий запит; - `/metrics` --- базові метрики.
+
+Перевірка через Nginx:
+
+``` bash
+curl -i -H 'Host: monitor.local' http://127.0.0.1:8080/health
+curl -i -H 'Host: monitor.local' http://127.0.0.1:8080/api/stats
+curl -i -H 'Host: monitor.local' http://127.0.0.1:8080/api/test-request
+```
+
+`/health` є ключовим endpoint для Zabbix і перевіряє не лише Flask, а й
+доступність PostgreSQL.
+
+## PostgreSQL
+
+`app-db` використовує PostgreSQL 16 і внутрішній порт `5432`. Дані
+статистики зберігаються в таблиці `requests` з полями: - `id`; -
+`endpoint`; - `duration_ms`; - `created_at`.
+
+Перевірка:
+
+``` bash
+docker compose exec app-db pg_isready
+docker compose exec app-db psql -U monitor_user -d network_monitor
+```
+
+Приклад SQL:
+
+``` sql
+SELECT id, endpoint, duration_ms, created_at
+FROM requests
+ORDER BY id DESC
+LIMIT 10;
+```
+
+Окремо працює `zabbix-db`, яка зберігає службові дані Zabbix.
+
+## Docker DNS
+
+Перевірка:
+
+``` bash
+docker compose exec web cat /etc/resolv.conf
+docker compose exec web python -c "import socket; print(socket.gethostbyname('app-db'))"
+```
+
+Docker DNS дозволяє Flask знаходити PostgreSQL за `app-db` без ручного
+прописування IP.
+
+## TCP/IP та мережеві перевірки
+
+Перевірка Flask → PostgreSQL:
+
+``` bash
+docker compose exec web python -c "import socket; s=socket.create_connection(('app-db',5432),3); print('TCP PostgreSQL: OK'); s.close()"
+```
+
+Netshoot:
+
+``` bash
+docker run --rm --network monitoring_net nicolaka/netshoot ip addr
+docker run --rm --network monitoring_net nicolaka/netshoot ip route
+docker run --rm --network monitoring_net nicolaka/netshoot nc -vz -w 3 web 5000
+docker run --rm --network monitoring_net nicolaka/netshoot nc -vz -w 3 app-db 5432
+```
+
+IP контейнерів:
+
+``` bash
+docker network inspect monitoring_net --format '{{range .Containers}}{{println .Name .IPv4Address}}{{end}}'
+```
+
+## Ізоляція
+
+Flask і PostgreSQL не публікують свої порти на хост. Для перевірки:
+
+``` bash
+docker inspect network-monitor-web --format '{{(index .NetworkSettings.Networks "monitoring_net").IPAddress}}'
+docker run --rm --network bridge nicolaka/netshoot getent hosts web
+```
+
+## Healthcheck
+
+Стан healthcheck:
+
+``` bash
+docker inspect network-monitor-web --format '{{json .State.Health}}'
+```
+
+Healthcheck використовує `/health` і дозволяє Docker контролювати
+готовність Flask.
+
+## Zabbix
+
+Zabbix складається з: - `zabbix-server`; - `zabbix-web`; -
+`zabbix-db`; - `zabbix-agent`.
+
+Логіка моніторингу:
 
 ``` text
-tcp.port == 5000
+Zabbix HTTP Agent
+      ↓
+GET /health
+      ↓
+Flask
+      ↓
+HTTP 200 / помилковий стан
+      ↓
+Item
+      ↓
+Trigger
+      ↓
+OK / PROBLEM
 ```
 
-Для PostgreSQL-з'єднань:
+Для тесту:
 
-``` text
-tcp.port == 5432
+``` bash
+docker compose stop web
 ```
 
-Другий фільтр показує пакети лише тоді, коли захоплення відбувається на
-інтерфейсі, через який проходить внутрішній трафік Docker. Щоб отримати
-такий трафік, може знадобитися `tcpdump` у діагностичному контейнері,
-під'єднаному до мережевого простору контейнера `web`. Під час захоплення
-потрібно створити запити до `/health` або `/api/stats`, а потім відкрити
-збережений файл у Wireshark.
+Відновлення:
+
+``` bash
+docker compose start web
+```
+
+## Wireshark
+
+Wireshark використовується для аналізу HTTP трафіку та окремо запитів до бази даних застосунку .
+
+Створення трафіку HTTP:
+
+``` bash
+curl -i -H 'Host: monitor.local' http://127.0.0.1:8080/health
+curl -i -H 'Host: monitor.local' http://127.0.0.1:8080/api/stats
+```
+
+Створення трафіку до бази даних вебдодатку:
+``` bash
+docker run --rm \
+  --network container:network-monitor-web \
+  --cap-add NET_ADMIN \
+  --cap-add NET_RAW \
+  -v "$PWD/captures:/captures" \
+  nicolaka/netshoot \
+  tcpdump -i any -nn -s0 -w /captures/postgres.pcap 'tcp port 5432'
+```
